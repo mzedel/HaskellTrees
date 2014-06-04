@@ -21,7 +21,6 @@ Literate Haskell: Trees
 
 > data Btree a = Leaf a | Fork (Btree a) (Btree a)
 
-
 Größe und Höhe
 
 Die Größe eines Baumes entspricht der Anzahl seiner Blätter. Die Anzahl der inneren Knoten entspricht immer der Anzahl der Blätter - 1.
@@ -37,7 +36,7 @@ Die Höhe eines Baumes entspricht seiner größten Schachtelungstiefe. Ein Baum,
 > height (Leaf x) = 0
 > height (Fork xt yt) = 1 + max (height xt) (height yt)
 
-> max 
+-- > max 
 
 Die Funktion "depths" errechnet die Tiefe eines Baumes und ersetzt dabei jeden Knoten durch seine entsprechende Höhe.
 
@@ -68,10 +67,6 @@ Damit lassen sich wieder einige bisherige Funktionen ausdrücken:
 > height2 = foldBtree (const 0) (lmax)
 >           where lmax m n = 1 + (max m n)
 
-Zur Erinnerung: "height" war definiert als
-< height (Leaf x) = 0
-< height (Fork xt yt) = 1 + max (height xt) (height yt)
-
 > flatten2 = foldBtree (\x -> [x]) (++)
 
 Sogar "mapBtree" lässt sich mit Hilfe von "foldBtree" ausdrücken.
@@ -81,49 +76,37 @@ Sogar "mapBtree" lässt sich mit Hilfe von "foldBtree" ausdrücken.
 ---------------------------------------------------------------------
 -- Show
 ---------------------------------------------------------------------
+beginnt mit "<" an der Wurzel und fügt ein ":" an den Anfang jeder Zeile
 
--- declare BinTree a to be an instance of Show
-> instance (Show a) => Show (BinTree a) where
->	-- will start by a '<' before the root
->	-- and put a : a begining of line
->	show t = "< " ++ replace '\n' "\n: " (treeshow "" t)
->	where
-		-- treeshow pref Tree shows a tree and starts each line with pref
-		-- We don't display the Empty tree
->		treeshow pref Empty = ""
-		-- Leaf
->		treeshow pref (Node x Empty Empty) =
+> instance (Show a) => Show (Btree a) where
+>	show t = "< " ++ replace '\n' "\n: " (treeshow "" t) where
+> --	treeshow pref Tree erzeugt einen Baum mit pref am Zeilenanfang
+>		treeshow pref Leaf = "" -- Leere Bäume werden nicht angezeigt
+>		treeshow pref (Fork x Leaf Leaf) = --	Blätter
 >					  (pshow pref x)
-		-- Right branch is empty
->		treeshow pref (Node x left Empty) =
+>		treeshow pref (Fork x left Leaf) = --	Nur linke Äste anzeigen
 >					  (pshow pref x) ++ "\n" ++
 >					  (showSon pref "`--" "   " left)
-		-- Left branch is empty
->		treeshow pref (Node x Empty right) =
+>		treeshow pref (Fork x Leaf right) = -- Nur rechte Äste anzeigen
 >					  (pshow pref x) ++ "\n" ++
 >					  (showSon pref "`--" "   " right)
-		-- Tree with left and right children non empty
->		treeshow pref (Node x left right) =
+>		treeshow pref (Fork x left right) = -- Astgabelungen anzeigen
 >					  (pshow pref x) ++ "\n" ++
 >					  (showSon pref "|--" "|  " left) ++ "\n" ++
 >					  (showSon pref "`--" "   " right)
 
-		-- shows a tree using some prefixes to make it nice
->		showSon pref before next t =
+>		showSon pref before next t = -- Hilfsmethode um Platzhalter und Vorzeichen anzuzeigen
 >					  pref ++ before ++ treeshow (pref ++ next) t
 
-		-- pshow replaces "\n" by "\n"++pref
->		pshow pref x = replace '\n' ("\n"++pref) (show x)
-
-		-- replaces one char by another string
->		replace c new string =
->		  concatMap (change c new) string
->		  where change c new x
->			| x == c = new
->			| otherwise = x:[] -- "x"
+>		pshow pref x = replace '\n' ("\n" ++ pref) (show x) -- ersetzt "\n" mit "\n" ++ pref
+> -- Stringersetzung
+>		replace c new string = concatMap (change c new) string
+>			where change c new x
+>				| x == c = new
+>				| otherwise = x:[] -- "x"
 
 ---------------------------------------------------------------------
--- Funktionssynthese (S.198/199) Rose-Tree -> BTree
+-- Funktionssynthese (S.198/199) Rose-Tree -> Btree
 ---------------------------------------------------------------------
 
 Rose a = Node a [Rose a]
@@ -160,7 +143,8 @@ Case (Node x (xts ++ [xt])):
 ---------------------------------------------------------------------
 BinarySearchTrees
 
-> data Stree a = Null | Fork (Stree a) a (Stree a)
+> data Stree a = Null | StreeFork (Stree a) a (Stree a)
+>	deriving (Eq, Ord, Show)
 
 Deforestation
 ~unnütz aufgebaute Bäume vermeiden
@@ -173,53 +157,74 @@ Deforestation
 < depth' n | n == 0 = 0
 < depth' n = 1 + max (depth' n) (depth' n)
 		
-	Bsp. für die Nutzung von Deforestation & BinarySearchTrees: Quicksort
->		mkStree :: (Ord a) -> [a] -> Stree a
->		mkStree[] = Null
->		mkStree(x:xs) = Fork (mkStree ys) x (mkStree zs)
->							where (ys, zs) = partition (=< x) xs
+Bsp. für die Nutzung von Deforestation und BinarySearchTrees: Quicksort
+
+> mkStree :: (Ord a) -> [a] -> Stree a
+> mkStree [] = Null
+> mkStree (x:xs) = StreeFork (mkStree ys) x (mkStree zs)
+>	where (ys, zs) = partition (< x) xs
 		
->		partition :: (a -> Bool) -> [a] -> ([a], [a])
->		partition p xs = (filter p xs, filter (not p) xs)
+> partition :: (a -> Bool) -> [a] -> ([a], [a])
+> partition p xs = (filter p xs, filter (not p) xs)
 		
->		flatten :: (Ord a) -> Stree a -> [a]
->		flatten Null = []
->		flatten (Fork xt x yt) = flatten xt ++ [x] ++ flatten yt
+> flatten' :: (Ord a) -> Stree a -> [a]
+> flatten' Null = []
+> flatten' (StreeFork xt x yt) = flatten xt ++ [x] ++ flatten yt
 		
->		qSort :: (Ord a) -> [a] -> [a]
->		qSort = flatten mkStree
+> qSort :: (Ord a) -> [a] -> [a]
+> qSort = flatten mkStree
 		
 		vs.
 		
->		qSort' :: (Ord a) -> [a] -> [a]
->		qSort' [] = []
->		qSort' (x:xs) = qSort' ys ++ [x] ++ qSort' zs
->					where (ys, zs) = partition (<= x) xs
+> qSort' :: (Ord a) -> [a] -> [a]
+> qSort' [] = []
+> qSort' (x:xs) = qSort' ys ++ [x] ++ qSort' zs
+>	where (ys, zs) = partition (< x) xs
 
 
 ---------------------------------------------------------------------
 -- Klassenliste
 ---------------------------------------------------------------------
-Problem: Zuordnung Namen, Matrikelnummern und Klausurnoten
-Name			Matrikelnummer
-Anderson		123456
-Banderson		234561
-Canderson		345612
-Danderson		456123
+-- Problem: Zuordnung Namen, Matrikelnummern und Klausurnoten
+-- Name			Matrikelnummer
+-- Anderson		123456
+-- Banderson		234561
+-- Canderson		345612
+-- Danderson		456123
 
-Matrikelnummer	Note
-123456			99
-234561			96
-345612			98
-456123			97
+-- Matrikelnummer	Note
+-- 123456			99
+-- 234561			96
+-- 345612			98
+-- 456123			97
+
+-- > type Name = String
+-- > type Iden = Integer
+-- > type Mark = Int
+-- > type Rank = Int
+
+-- > type Codes = [(Name, Iden)]
+-- > type Marks = [(Iden, Mark)]
+-- > type Ranks = [(Name, Mark, Rank)]
+
+-- > classlist :: (Codes, Marks) -> Ranks
+-- > classlist = rank collate
+
+-- > collate :: (Codes, Marks) -> [(Name, Mark)]
+
+-- > rank :: [(Name, Mark)] -> Ranks
+
+-- > display :: Ranks -> String
 
 
 
 
-Unendliche (ungeordnete) binäre Bäume:
 
-> infiniTree = Leaf 0 infiniTree infiniTree
 
-> takeDepth _ Empty = Empty
-> takeDepth 0 _ = Empty
-> takeDepth n (Leaf x left right) = Leaf x (takeDepth (n-1) left) (takeDepth (n-1) right)
+-- Unendliche (ungeordnete) binäre Bäume:
+
+-- > infiniTree = Leaf 0 infiniTree infiniTree
+
+-- > takeDepth _ Empty = Empty
+-- > takeDepth 0 _ = Empty
+-- > takeDepth n (Leaf x left right) = Leaf x (takeDepth (n-1) left) (takeDepth (n-1) right)
