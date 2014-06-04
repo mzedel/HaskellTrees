@@ -3,40 +3,24 @@
 
 Literate Haskell: Trees
 
-1) Erzeugung von Bäumen
+1) Bäume
 2) Operationen auf Bäumen
-3) Map/ Filter/ Zip/ Fold/ Scan/... - Bsp. foldBtree
+3) Map/ Fold... - Bsp. foldBtree
+4) Show/ treeShow
+5) Rose-Trees
 6) Funktionssynthese
 	toB
-7) Show 
-7) Anwendungsbeispiel: BinarySearch
-	BinarySearchTrees
+8) Anwendungsbeispiel: Red-Black-Trees
+7) Anwendungsbeispiel: BinarySearchTrees
 	Deforestation
 		Bsp.: Quicksort
-8) Anwendungsbeispiel: Red-Black-Trees
 
----------------------------------------------------------------------
+--------------------------------------------------------------------
 -- Binärbäume
 ---------------------------------------------------------------------
 
 > data Btree a = Leaf a | Fork (Btree a) (Btree a)
 
-> showBtree (Leaf a) = show a
-> showBtree (Fork xt yt) = "("++ (showBtree xt) ++" "++ (showBtree yt) ++")"
-
-> btree = (Fork (Leaf 3) (Fork (Fork (Leaf 4) (Leaf 5)) (Leaf 6)))
-
-Und umgekehrt am Beispiel von binären Bäumen:
-
-> treeFromList :: (Ord a) => [a] -> BinTree a
-> treeFromList [] = Empty
-> treeFromList (x:xs) = Leaf x (treeFromList (filter (<x) xs))
-								(treeFromList (filter (>x) xs))
-
-Bäume lassen sich auch auf Listen abbilden:
-
-> flatten (Leaf x) = [x]
-> flatten (Fork xt yt) = flatten xt ++ flatten yt
 
 Größe und Höhe
 
@@ -45,17 +29,25 @@ Die Größe eines Baumes entspricht der Anzahl seiner Blätter. Die Anzahl der i
 > size (Leaf x) = 1
 > size (Fork xt yt) = size xt + size yt
 
+> nodes (Leaf x) = 0
+> nodes (Fork xt yt) = 1 + nodes xt + nodes yt
+
 Die Höhe eines Baumes entspricht seiner größten Schachtelungstiefe. Ein Baum, der nur aus einem Blatt besteht, hat die Höhe 0.
 
 > height (Leaf x) = 0
 > height (Fork xt yt) = 1 + max (height xt) (height yt)
 
-Díe Funktion "depths" errechnet die Tiefe eines Baumes und ersetzt dabei jeden Knoten durch seine entsprechende Höhe.
+> max 
+
+Die Funktion "depths" errechnet die Tiefe eines Baumes und ersetzt dabei jeden Knoten durch seine entsprechende Höhe.
 
 > depths = down 0
-
 > down n (Leaf x) = Leaf n
 > down n (Fork xt yt) = Fork (down (n+1) xt) (down (n+1) yt)
+
+> flatten (Leaf x) = [x]
+> flatten (Fork xt yt) = flatten xt ++ flatten yt
+
 
 "map" und "fold"
 
@@ -71,6 +63,8 @@ Damit lassen sich wieder einige bisherige Funktionen ausdrücken:
 
 > size2 = foldBtree (const 1) (+)
 
+> nodes2 = 1 + foldBtree (const 1) (+)
+
 > height2 = foldBtree (const 0) (lmax)
 >           where lmax m n = 1 + (max m n)
 
@@ -83,6 +77,50 @@ Zur Erinnerung: "height" war definiert als
 Sogar "mapBtree" lässt sich mit Hilfe von "foldBtree" ausdrücken.
 
 > mapBtree2 f = foldBtree (Leaf . f) Fork
+
+---------------------------------------------------------------------
+-- Show
+---------------------------------------------------------------------
+
+-- declare BinTree a to be an instance of Show
+> instance (Show a) => Show (BinTree a) where
+>	-- will start by a '<' before the root
+>	-- and put a : a begining of line
+>	show t = "< " ++ replace '\n' "\n: " (treeshow "" t)
+>	where
+		-- treeshow pref Tree shows a tree and starts each line with pref
+		-- We don't display the Empty tree
+>		treeshow pref Empty = ""
+		-- Leaf
+>		treeshow pref (Node x Empty Empty) =
+>					  (pshow pref x)
+		-- Right branch is empty
+>		treeshow pref (Node x left Empty) =
+>					  (pshow pref x) ++ "\n" ++
+>					  (showSon pref "`--" "   " left)
+		-- Left branch is empty
+>		treeshow pref (Node x Empty right) =
+>					  (pshow pref x) ++ "\n" ++
+>					  (showSon pref "`--" "   " right)
+		-- Tree with left and right children non empty
+>		treeshow pref (Node x left right) =
+>					  (pshow pref x) ++ "\n" ++
+>					  (showSon pref "|--" "|  " left) ++ "\n" ++
+>					  (showSon pref "`--" "   " right)
+
+		-- shows a tree using some prefixes to make it nice
+>		showSon pref before next t =
+>					  pref ++ before ++ treeshow (pref ++ next) t
+
+		-- pshow replaces "\n" by "\n"++pref
+>		pshow pref x = replace '\n' ("\n"++pref) (show x)
+
+		-- replaces one char by another string
+>		replace c new string =
+>		  concatMap (change c new) string
+>		  where change c new x
+>			| x == c = new
+>			| otherwise = x:[] -- "x"
 
 ---------------------------------------------------------------------
 -- Funktionssynthese (S.198/199) Rose-Tree -> BTree
@@ -113,54 +151,68 @@ Case (Node x (xts ++ [xt])):
 				xt = toR yb
 
 ---------------------------------------------------------------------
--- Show
----------------------------------------------------------------------
-
-	Data.Tree -> drawTree
-
----------------------------------------------------------------------
--- Anwendungsbeispiel: BinarySearch
----------------------------------------------------------------------
-BinarySearchTrees
-
-> data Stree a = Null | Fork (Stree a) a (Stree a)
-
-flatten :: (Ord a) -> Stree a -> [a]
-flatten Null = []
-flatten (Fork xt x yt) = flatten xt ++ [x] ++ flatten yt
-
-Deforestation
-~unnütz aufgebaute Bäume vermeiden
-Bsp.:	um die Tiefe eines Baumes zu errechnen wird zunächst der Baum
-		voll aufgebaut, danach bis zu den Blättern traversiert um die
-		maximale Tiefe zu ermitteln.
-		(-- depth Leaf = 0 --)
-		(-- depth (Node t1 t2) = 1 + max (depth t1) (depth t2) --)
-		Besser:
-		(-- depth' n | n == 0 = 0 --)
-		(-- depth' n = 1 + max (depth' n) (depth' n) --)
-		
-Bsp. für die Nutzung von BinarySearchTrees: Quicksort
-		partition :: (a -> Bool) -> [a] -> ([a], [a])
-		partition p xs = (filter p xs, filter (not p) xs)
-		
-		mkStree :: (Ord a) -> [a] -> Stree a
-		mkStree[] = Null
-		mkStree(x:xs) = Fork (mkStree ys) x (mkStree zs)
-							where (ys, zs) = partition (=< x) xs
-		
-		sort :: (Ord a) -> [a] -> [a]
-		sort = flatten mkStree
-
-
----------------------------------------------------------------------
 -- Red-Black-Trees
 ---------------------------------------------------------------------
 
 
 ---------------------------------------------------------------------
+-- Anwendungsbeispiel: BinarySearchTrees
+---------------------------------------------------------------------
+BinarySearchTrees
+
+> data Stree a = Null | Fork (Stree a) a (Stree a)
+
+Deforestation
+~unnütz aufgebaute Bäume vermeiden
+	Bsp.: um die Tiefe eines Baumes zu errechnen wird zunächst der Baum
+		voll aufgebaut, danach bis zu den Blättern traversiert um die
+		maximale Tiefe zu ermitteln.
+< depth Leaf = 0
+< depth (Node t1 t2) = 1 + max (depth t1) (depth t2)
+		Besser:
+< depth' n | n == 0 = 0
+< depth' n = 1 + max (depth' n) (depth' n)
+		
+	Bsp. für die Nutzung von Deforestation & BinarySearchTrees: Quicksort
+>		mkStree :: (Ord a) -> [a] -> Stree a
+>		mkStree[] = Null
+>		mkStree(x:xs) = Fork (mkStree ys) x (mkStree zs)
+>							where (ys, zs) = partition (=< x) xs
+		
+>		partition :: (a -> Bool) -> [a] -> ([a], [a])
+>		partition p xs = (filter p xs, filter (not p) xs)
+		
+>		flatten :: (Ord a) -> Stree a -> [a]
+>		flatten Null = []
+>		flatten (Fork xt x yt) = flatten xt ++ [x] ++ flatten yt
+		
+>		qSort :: (Ord a) -> [a] -> [a]
+>		qSort = flatten mkStree
+		
+		vs.
+		
+>		qSort' :: (Ord a) -> [a] -> [a]
+>		qSort' [] = []
+>		qSort' (x:xs) = qSort' ys ++ [x] ++ qSort' zs
+>					where (ys, zs) = partition (<= x) xs
+
+
+---------------------------------------------------------------------
 -- Klassenliste
 ---------------------------------------------------------------------
+Problem: Zuordnung Namen, Matrikelnummern und Klausurnoten
+Name			Matrikelnummer
+Anderson		123456
+Banderson		234561
+Canderson		345612
+Danderson		456123
+
+Matrikelnummer	Note
+123456			99
+234561			96
+345612			98
+456123			97
+
 
 
 
