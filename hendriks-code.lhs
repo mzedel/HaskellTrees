@@ -5,11 +5,11 @@ Helfer: Binärbäume
 > showBtree (Fork xt yt) = "("++ (showBtree xt) ++" "++ (showBtree yt) ++")"
 
 
-#####################################
-#                                   #
-#  RoseTrees und Programmsynthese  #
-#                                   #
-#####################################
+---------------------------------------
+--                                   --
+--  RoseTrees und Programmsynthese   --
+--                                   --
+---------------------------------------
 
 Das besondere an RoseTrees ist die unbegrenzte Anzahl an Söhnen an jedem Knoten. Daraus ergibt sich auch die Definition von "Knoten" und "Blatt": Knoten haben eine nicht-leere Liste von Söhnen, Blätter haben eine leere Liste von Söhnen.
 
@@ -105,18 +105,58 @@ Angewendet auf toB bedeutet das:
 Damit sind die Herleitung beider Fälle gezeigt, die beiden verwendeten Eigenschaften von toB bewiesen und somit die Programmsynthese abgeschlossen.
 
 
-#####################
-#                   #
-#  Red-Black-Trees  #
-#                   #
-#####################
+-----------------------
+--                   --
+--  Red-Black-Trees  --
+--                   --
+-----------------------
 
-Bei Red-Black-Trees handelt es sich um eine Spezialform von binären Suchbäumen, die zwar ausbalanciert sind, in ihrer Balance aber nicht so strikt wie beispielsweise AVL-Trees (Set-Vortrag). Alle Operationen (einfügen, lesen, entfernen) haben eine Laufzeit von log(n). Red-Black-Trees werden unter anderem im Linux-Scheduler eingesetzt. Jeder Knoten in einem Red-Black-Tree besitzt eine Farbe (Rot oder Schwarz), die Wurzel ist immer schwarz, Blätter sind immer schwarz und besitzen kein Datum.
+Bei Red-Black-Trees handelt es sich um eine Spezialform von binären Suchbäumen, die zwar ausbalanciert sind, in ihrer Balance aber nicht so strikt wie beispielsweise AVL-Trees (Set-Vortrag). Alle Operationen (einfügen, lesen, entfernen) haben eine Laufzeit von log(n). Red-Black-Trees werden unter anderem im Linux-Scheduler eingesetzt. Achtung: Blätter besitzen kein Datum.
 
 Für Red-Black-Trees gelten die folgenden Regeln:
+1. Ein Knoten ist entweder rot oder schwarz
+2. Die Wurzel ist immer schwarz
+3. Alle Blätter sind schwarz
+4. Jeder rote Knoten muss zwei schwarzen Kinder haben
+5. Jeder Pfad von einem Knoten zu seinen Blättern enthält die gleiche Anzahl schwarzer Knoten
 
+> data Color = R | B
+> data RB a = RBLeaf | RBTree Color (RB a) a (RB a)
 
-data Color = R | B
-data RB a = RBLeaf | RBTree Color (RB a) a (RB a)
+> exampleRBTree = RBTree B (RBTree R (RBTree B  RBLeaf
+>                                               1
+>                                              (RBTree R RBLeaf
+>                                                        6
+>                                                        RBLeaf))
+>                                     8
+>                                    (RBTree B  RBLeaf
+>                                               11
+>                                               RBLeaf))
+>                           13
+>                          (RBTree R (RBTree B  RBLeaf
+>                                               15
+>                                               RBLeaf)
+>                                     17
+>                                    (RBTree B (RBTree R RBLeaf
+>                                                        22
+>                                                        RBLeaf)
+>                                               25
+>                                              (RBTree R RBLeaf
+>                                                        27
+>                                                        RBLeaf)))
 
-balance (RBTree)
+Dank Pattern Matching ist die Notation der Balance-Operationen besonders leicht.
+
+> balance B (RBTree R (RBTree R a x b) y  c              ) z  d                                             = (RBTree R (RBTree B a x b) y (RBTree B c z d))
+> balance B (RBTree R  a               x (RBTree R b y c)) z  d                                             = (RBTree R (RBTree B a x b) y (RBTree B c z d))
+> balance B  a                                             x (RBTree R (RBTree R b y c) z  d              ) = (RBTree R (RBTree B a x b) y (RBTree B c z d))
+> balance B  a                                             x (RBTree R  b               y (RBTree R c z d)) = (RBTree R (RBTree B a x b) y (RBTree B c z d))
+> balance i  a                                             x  b                                             =  RBTree i  a               x  b
+
+Da es sich beim Red-Black-Tree um eine Spezialform eines Suchbaumes handelt, werden Elemente beim Einfügen immer entsprechend der bisherigen Knotenwerte weitergereicht, bis ein Blatt des Baumes erreicht ist. Der neu eingefügt Knoten wird rot gefärbt, anschließend finden die Balance-Operationen statt.
+
+> insertRB element tree = RBTree B left middle right
+>                         where ins  RBLeaf                          = RBTree R RBLeaf element RBLeaf
+>                               ins (RBTree color left middle right) = if element < middle then balance color (ins left) middle  right
+>                                                                                          else balance color  left      middle (ins right)
+>                               RBTree _ left middle right = ins tree
