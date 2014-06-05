@@ -19,22 +19,22 @@ Literate Haskell: Trees
 -- Binärbäume
 ---------------------------------------------------------------------
 
-> data Btree a = Leaf a | Fork (Btree a) (Btree a)
+> data Btree a = Leaf a | Fork Int (Btree a) (Btree a)
 
 Größe und Höhe
 
 Die Größe eines Baumes entspricht der Anzahl seiner Blätter. Die Anzahl der inneren Knoten entspricht immer der Anzahl der Blätter - 1.
 
 > size (Leaf x) = 1
-> size (Fork xt yt) = size xt + size yt
+> size (Fork n xt yt) = size xt + size yt
 
 > nodes (Leaf x) = 0
-> nodes (Fork xt yt) = 1 + nodes xt + nodes yt
+> nodes (Fork n xt yt) = 1 + nodes xt + nodes yt
 
 Die Höhe eines Baumes entspricht seiner größten Schachtelungstiefe. Ein Baum, der nur aus einem Blatt besteht, hat die Höhe 0.
 
 > height (Leaf x) = 0
-> height (Fork xt yt) = 1 + max (height xt) (height yt)
+> height (Fork n xt yt) = 1 + max (height xt) (height yt)
 
 -- > max 
 
@@ -42,10 +42,10 @@ Die Funktion "depths" errechnet die Tiefe eines Baumes und ersetzt dabei jeden K
 
 > depths = down 0
 > down n (Leaf x) = Leaf n
-> down n (Fork xt yt) = Fork (down (n+1) xt) (down (n+1) yt)
+> down n (Fork m xt yt) = Fork m (down (n+1) xt) (down (n+1) yt)
 
 > flatten (Leaf x) = [x]
-> flatten (Fork xt yt) = flatten xt ++ flatten yt
+> flatten (Fork n xt yt) = flatten xt ++ flatten yt
 
 
 "map" und "fold"
@@ -53,25 +53,28 @@ Die Funktion "depths" errechnet die Tiefe eines Baumes und ersetzt dabei jeden K
 Die oft eingesetzten Methoden "map" und "fold" funktionieren natürlich auch auf Bäumen. "map" wendet hierbei eine Funktion auf jedes Blatt des Baumes an, während "fold" eine Funktion für Blätter und eine für Knoten erwartet.
 
 > mapBtree f (Leaf x) = Leaf (f x)
-> mapBtree f (Fork xt yt) = Fork (mapBtree f xt) (mapBtree f yt)
+> mapBtree f (Fork m r l) = Fork (f m) (mapBtree f l) (mapBtree f r)
 
-> foldBtree f g (Leaf x) = f x
-> foldBtree f g (Fork xt yt) = g (foldBtree f g xt) (foldBtree f g yt)
+> foldBtree f g (Leaf x) = g x
+> foldBtree f g (Fork m l r) = f m (foldBtree f g l) (foldBtree f g r)
 
 Damit lassen sich wieder einige bisherige Funktionen ausdrücken:
 
-> size2 = foldBtree (const 1) (+)
+-- > size2 :: Btree a -> Int
 
-> nodes2 = 1 + foldBtree (const 1) (+)
+> size2 = foldBtree (\_ l r -> (const 1)) (+)
 
-> height2 = foldBtree (const 0) (lmax)
->           where lmax m n = 1 + (max m n)
+-- > nodes2 :: Btree a -> Int
 
-> flatten2 = foldBtree (\x -> [x]) (++)
+> nodes2 = (const 1) + foldBtree (\_ l r -> (const 1)) (+)
 
-Sogar "mapBtree" lässt sich mit Hilfe von "foldBtree" ausdrücken.
+> height2 = foldBtree (\_ m n -> 1 + max m n) (const 0)
 
-> mapBtree2 f = foldBtree (Leaf . f) Fork
+> flatten2 = foldBtree (\n l r -> l ++ [n] ++ r) (\x -> x)
+
+-- Sogar "mapBtree" lässt sich mit Hilfe von "foldBtree" ausdrücken.
+
+-- > mapBtree2 f = foldBtree (Leaf . f) Fork
 
 ---------------------------------------------------------------------
 -- Show
@@ -81,13 +84,13 @@ beginnt mit "<" an der Wurzel und fügt ein ":" an den Anfang jeder Zeile
 > instance (Show a) => Show (Btree a) where
 >	show t = "< " ++ replace '\n' "\n: " (treeshow "" t) where
 > --	treeshow pref Tree erzeugt einen Baum mit pref am Zeilenanfang
->		treeshow pref Leaf = "" -- Leere Bäume werden nicht angezeigt
->		treeshow pref (Fork x Leaf Leaf) = --	Blätter
+>		treeshow pref (Leaf x) = "" -- Leere Bäume werden nicht angezeigt
+>		treeshow pref (Fork x (Leaf _) (Leaf _)) = --	Blätter
 >					  (pshow pref x)
->		treeshow pref (Fork x left Leaf) = --	Nur linke Äste anzeigen
+>		treeshow pref (Fork x left (Leaf _)) = --	Nur linke Äste anzeigen
 >					  (pshow pref x) ++ "\n" ++
 >					  (showSon pref "`--" "   " left)
->		treeshow pref (Fork x Leaf right) = -- Nur rechte Äste anzeigen
+>		treeshow pref (Fork x (Leaf _) right) = -- Nur rechte Äste anzeigen
 >					  (pshow pref x) ++ "\n" ++
 >					  (showSon pref "`--" "   " right)
 >		treeshow pref (Fork x left right) = -- Astgabelungen anzeigen
@@ -147,36 +150,38 @@ BinarySearchTrees
 >	deriving (Eq, Ord, Show)
 
 Deforestation
-~unnütz aufgebaute Bäume vermeiden
+unnütz aufgebaute Bäume vermeiden
 	Bsp.: um die Tiefe eines Baumes zu errechnen wird zunächst der Baum
 		voll aufgebaut, danach bis zu den Blättern traversiert um die
 		maximale Tiefe zu ermitteln.
 < depth Leaf = 0
 < depth (Node t1 t2) = 1 + max (depth t1) (depth t2)
-		Besser:
+Besser:
 < depth' n | n == 0 = 0
 < depth' n = 1 + max (depth' n) (depth' n)
 		
 Bsp. für die Nutzung von Deforestation und BinarySearchTrees: Quicksort
 
-> mkStree :: (Ord a) -> [a] -> Stree a
+
+> mkStree	:: (Ord a) => [a] -> Stree a
 > mkStree [] = Null
 > mkStree (x:xs) = StreeFork (mkStree ys) x (mkStree zs)
 >	where (ys, zs) = partition (< x) xs
 		
-> partition :: (a -> Bool) -> [a] -> ([a], [a])
-> partition p xs = (filter p xs, filter (not p) xs)
+> partition	:: (a -> Bool) => [a] -> ([a], [a])
+> partition p xs = (filter p xs, filter (not.p) xs)
+
 		
-> flatten' :: (Ord a) -> Stree a -> [a]
-> flatten' Null = []
-> flatten' (StreeFork xt x yt) = flatten xt ++ [x] ++ flatten yt
+> sTreeflatten	:: (Ord a) => Stree a -> [a]
+> sTreeflatten Null = []
+> sTreeflatten (StreeFork xt x yt) = sTreeflatten xt ++ [x] ++ sTreeflatten yt
 		
-> qSort :: (Ord a) -> [a] -> [a]
-> qSort = flatten mkStree
+> qSort		:: (Ord a) => [a] -> [a]
+> qSort = sTreeflatten.mkStree
 		
 		vs.
 		
-> qSort' :: (Ord a) -> [a] -> [a]
+> qSort'	:: (Ord a) => [a] -> [a]
 > qSort' [] = []
 > qSort' (x:xs) = qSort' ys ++ [x] ++ qSort' zs
 >	where (ys, zs) = partition (< x) xs
